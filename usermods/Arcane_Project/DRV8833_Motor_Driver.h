@@ -31,6 +31,15 @@ class DRV8833DriverUsermod : public Usermod {
     int buttonCurrentState;
     unsigned long lastDebounceTime = 0;
 
+    bool slowDecay = true;
+    bool fastDecay = false;
+    bool forwards = true;
+    bool backwards = false;
+    bool motorLastState = LOW;
+    bool enabled = true;
+    int motorSpeed = 255;
+    int transitionDuration = 1;
+
     public:
 
     void setup()
@@ -43,6 +52,69 @@ class DRV8833DriverUsermod : public Usermod {
         ledcSetup(AIN2_PWM_CHANNEL, PWM_FREQ, PWM_RES);
         ledcAttachPin(AIN1_PIN, AIN1_PWM_CHANNEL);
         ledcAttachPin(AIN2_PIN, AIN2_PWM_CHANNEL);
+    }
+
+    int getTimeBetweenIncrement(int speed, int transitionDuration)
+    {
+        return ((transitionDuration*1000)/speed);
+    }
+
+    void adjustMotorSpeed(int currentSpeed, int targetSpeed, int transitionDuration, int pwmChannel)
+    {
+        unsigned long timeOfLastIncrement = millis();
+        int dutyCycle = currentSpeed;
+        if (targetSpeed > currentSpeed)
+        {
+            while (dutyCycle <= targetSpeed)
+            {
+                if ((millis() - timeOfLastIncrement) >= getTimeBetweenIncrement(targetSpeed, transitionDuration))
+                {
+                    ledcWrite(pwmChannel, dutyCycle);
+                    timeOfLastIncrement = millis();
+                    dutyCycle++;
+                }
+            }
+        }
+
+        else if (targetSpeed < currentSpeed)
+        {
+            while (dutyCycle >= targetSpeed)
+            {
+                if ((millis() - timeOfLastIncrement) >= getTimeBetweenIncrement(currentSpeed, transitionDuration))
+                {
+                    ledcWrite(pwmChannel, dutyCycle);
+                    timeOfLastIncrement = millis();
+                    dutyCycle--;
+                }
+            }
+        }
+    }
+
+    void motorToggle(bool forwards, bool backwards, bool slowDecay, bool fastDecay, int currentSpeed, int targetSpeed, int transitionDuration)
+    {
+        if (forwards == true && fastDecay == true)
+        {
+            ledcWrite(AIN2_PWM_CHANNEL, 0);
+            adjustMotorSpeed(currentSpeed, targetSpeed, transitionDuration, AIN1_PWM_CHANNEL);
+        }
+
+        else if (forwards == true && slowDecay == true)
+        {
+            ledcWrite(AIN1_PWM_CHANNEL, 255);
+            adjustMotorSpeed(currentSpeed, targetSpeed, transitionDuration, AIN2_PWM_CHANNEL);
+        }
+
+        else if (backwards == true && fastDecay == true)
+        {
+            ledcWrite(AIN1_PWM_CHANNEL, 0);
+            adjustMotorSpeed(currentSpeed, targetSpeed, transitionDuration, AIN2_PWM_CHANNEL);
+        }
+
+        else if (backwards == true && slowDecay == true)
+        {
+            ledcWrite(AIN2_PWM_CHANNEL, 255);
+            adjustMotorSpeed(currentSpeed, targetSpeed, transitionDuration, AIN1_PWM_CHANNEL);
+        }
     }
 
     void loop()
@@ -62,6 +134,22 @@ class DRV8833DriverUsermod : public Usermod {
         {
             lastDebounceTime = millis();
             buttonLastFlickerState = buttonCurrentState;
+        }
+
+        if ((millis() - lastDebounceTime) > DEBOUNCE_TIME)
+        {
+            if (buttonLastSteadyState == HIGH && buttonCurrentState == LOW)
+            {
+                if (motorLastState == LOW && enabled == true)
+                {
+                    motorToggle(forwards, backwards, slowDecay, fastDecay, 0, motorSpeed, transitionDuration);
+                }
+
+                else if (motorLastState == HIGH && enabled == true)
+                {
+                    motorToggle(forwards, backwards, slowDecay, fastDecay, motorSpeed, 1, transitionDuration);
+                }
+            }
         }
 
 
