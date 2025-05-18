@@ -244,7 +244,7 @@
 
 #include "../usermods/Arcane_Project/LED_Toggle.h"
 
-#include "../usermods/Arcane_Project/L298N_Motor_Driver.h"
+#include "../usermods/Arcane_Project/DRV8833_Motor_Driver.h"
 
 #include "../usermods/Arcane_Project/Startup_Jingle.h"
 
@@ -479,7 +479,7 @@ void registerUsermods()
 
   UsermodManager::add(new LEDToggleUsermod());
 
-  UsermodManager::add(new L298NDriverUsermod());
+  UsermodManager::add(new DRV8833DriverUsermod());
 
   UsermodManager::add(new StartupJingleUsermod());
 }
