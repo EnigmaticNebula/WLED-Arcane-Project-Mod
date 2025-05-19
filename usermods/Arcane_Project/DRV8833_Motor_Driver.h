@@ -22,7 +22,8 @@
 
 #define DEBOUNCE_TIME 50 // Time between button toggles that is considered anomalous
 
-class DRV8833DriverUsermod : public Usermod {
+class DRV8833DriverUsermod : public Usermod 
+{
 
     private:
 
@@ -48,9 +49,6 @@ class DRV8833DriverUsermod : public Usermod {
     static const bool defEnabled = true;
     static const int defMotorSpeed = 255;
     static const int defTransitionDuration = 1;
-
-    bool defFastDecay = false;
-
 
     static const char _name[];
     static const char _modes[];
@@ -78,6 +76,7 @@ class DRV8833DriverUsermod : public Usermod {
         ledcSetup(AIN2_PWM_CHANNEL, PWM_FREQ, PWM_RES);
         ledcAttachPin(AIN1_PIN, AIN1_PWM_CHANNEL);
         ledcAttachPin(AIN2_PIN, AIN2_PWM_CHANNEL);
+        //Serial.begin(115200);
     }
 
     int getTimeBetweenIncrement(int speed, int transitionDuration)
@@ -105,9 +104,9 @@ class DRV8833DriverUsermod : public Usermod {
         else if (targetSpeed < currentSpeed)
         {
             while (dutyCycle >= targetSpeed)
-            {
+            {   
                 if ((millis() - timeOfLastIncrement) >= getTimeBetweenIncrement(currentSpeed, transitionDuration))
-                {
+                {   
                     ledcWrite(pwmChannel, dutyCycle);
                     timeOfLastIncrement = millis();
                     dutyCycle--;
@@ -120,24 +119,28 @@ class DRV8833DriverUsermod : public Usermod {
     {
         if (forwards == true && fastDecay == true)
         {
+            //Serial.println("Forwards, fast decay");
             ledcWrite(AIN2_PWM_CHANNEL, 0);
             adjustMotorSpeed(currentSpeed, targetSpeed, transitionDuration, AIN1_PWM_CHANNEL);
         }
 
         else if (forwards == true && slowDecay == true)
-        {
+        {   
+            //Serial.println("Forwards, slow decay");
             ledcWrite(AIN1_PWM_CHANNEL, 255);
             adjustMotorSpeed(currentSpeed, targetSpeed, transitionDuration, AIN2_PWM_CHANNEL);
         }
 
         else if (backwards == true && fastDecay == true)
-        {
+        {   
+            //Serial.println("Reverse, fast decay");
             ledcWrite(AIN1_PWM_CHANNEL, 0);
             adjustMotorSpeed(currentSpeed, targetSpeed, transitionDuration, AIN2_PWM_CHANNEL);
         }
 
         else if (backwards == true && slowDecay == true)
-        {
+        {   
+            //Serial.println("Reverse, slow decay");
             ledcWrite(AIN2_PWM_CHANNEL, 255);
             adjustMotorSpeed(currentSpeed, targetSpeed, transitionDuration, AIN1_PWM_CHANNEL);
         }
@@ -156,6 +159,8 @@ class DRV8833DriverUsermod : public Usermod {
         // Slow decay allows for the motor to start at a lower voltage, and the increase of RPM with voltage is more linear
         // Fast decay means the motor starts at a higher voltage and the increase of RPM with voltage is less linear
 
+        buttonCurrentState = digitalRead(MOTOR_BUTTON_PIN);
+
         if (buttonCurrentState != buttonLastFlickerState)
         {
             lastDebounceTime = millis();
@@ -164,11 +169,17 @@ class DRV8833DriverUsermod : public Usermod {
 
         if ((millis() - lastDebounceTime) > DEBOUNCE_TIME)
         {
+            //Serial.println("VALID BUTTON PRESS");
             if (buttonLastSteadyState == HIGH && buttonCurrentState == LOW)
-            {
+            {   
+                Serial.println("pls work");
                 if (motorLastState == LOW && enabled == true)
                 {
                     motorToggle(forwards, backwards, slowDecay, fastDecay, 0, motorSpeed, transitionDuration);
+                    Serial.println(forwards);
+                    Serial.println(backwards);
+                    Serial.println(fastDecay);
+                    Serial.println(slowDecay);
                     motorLastState = HIGH;
                 }
 
@@ -179,47 +190,67 @@ class DRV8833DriverUsermod : public Usermod {
                 }
 
             }
-        }
 
-        buttonLastSteadyState = buttonCurrentState;
+            buttonLastSteadyState = buttonCurrentState;
+        }
     }
 
     void addToConfig(JsonObject& root) override
     {
-    JsonObject top = root.createNestedObject(FPSTR(_name));
-    top[FPSTR(_enabled)] = enabled;
-    top[FPSTR(_resetDefaults)] = resetDefaults;
+        JsonObject top = root.createNestedObject(FPSTR(_name));
+        top[FPSTR(_enabled)] = enabled;
+        top[FPSTR(_resetDefaults)] = resetDefaults;
 
-    JsonObject motorModes = top.createNestedObject(FPSTR(_modes));
-    motorModes[FPSTR(_fastDecay)] = fastDecay;
-    motorModes[FPSTR(_slowDecay)] = slowDecay;
-    motorModes[FPSTR(_forwards)] = forwards;
-    motorModes[FPSTR(_backwards)] = backwards;
+        JsonObject motorModes = top.createNestedObject(FPSTR(_modes));
+        motorModes[FPSTR(_fastDecay)] = fastDecay;
+        motorModes[FPSTR(_slowDecay)] = slowDecay;
+        motorModes[FPSTR(_forwards)] = forwards;
+        motorModes[FPSTR(_backwards)] = backwards;
 
-    JsonObject speed = top.createNestedObject(FPSTR(_speed));
-    speed[FPSTR(_motorSpeed)] = motorSpeed;
-    speed[FPSTR(_transitionDuration)] = transitionDuration;
+        JsonObject speed = top.createNestedObject(FPSTR(_speed));
+        speed[FPSTR(_motorSpeed)] = motorSpeed;
+        speed[FPSTR(_transitionDuration)] = transitionDuration;
 
-    if (resetDefaults == true)
-    {
-        top[FPSTR(_enabled)] = defEnabled;
-        top[FPSTR(_resetDefaults)] = false;
-        motorModes[FPSTR(_fastDecay)] = defFastDecay;
-        motorModes[FPSTR(_slowDecay)] = defSlowDecay;
-        motorModes[FPSTR(_forwards)] = defForwards;
-        motorModes[FPSTR(_backwards)] = defBackwards;
-        speed[FPSTR(_motorSpeed)] = defMotorSpeed;
-        speed[FPSTR(_transitionDuration)] = defTransitionDuration;
+        if (resetDefaults == true)
+        {
+            top[FPSTR(_enabled)] = defEnabled;
+            top[FPSTR(_resetDefaults)] = false;
+            motorModes[FPSTR(_fastDecay)] = defFastDecay;
+            motorModes[FPSTR(_slowDecay)] = defSlowDecay;
+            motorModes[FPSTR(_forwards)] = defForwards;
+            motorModes[FPSTR(_backwards)] = defBackwards;
+            speed[FPSTR(_motorSpeed)] = defMotorSpeed;
+            speed[FPSTR(_transitionDuration)] = defTransitionDuration;
+        }
     }
 
     bool readFromConfig(JsonObject& root) override
-    {
+    {   
+        Serial.begin(115200);
         JsonObject top = root[FPSTR(_name)];
         JsonObject motorModes = top[FPSTR(_modes)];
-        JsonObjcet speed = top[FPSTR(_speed)];
+        JsonObject speed = top[FPSTR(_speed)];
 
         bool configComplete = !top,isNull();
 
+        configComplete &= getJsonValue(top[FPSTR(_enabled)], enabled);
+        configComplete &= getJsonValue(top[FPSTR(_resetDefaults)], resetDefaults);
+
+        configComplete &= getJsonValue(motorModes[FPSTR(_fastDecay)], fastDecay);
+        configComplete &= getJsonValue(motorModes[FPSTR(_slowDecay)], slowDecay);
+        configComplete &= getJsonValue(motorModes[FPSTR(_forwards)], forwards);
+        configComplete &= getJsonValue(motorModes[FPSTR(_backwards)], backwards);
+
+        configComplete &= getJsonValue(speed[FPSTR(_motorSpeed)], motorSpeed);
+        configComplete &= getJsonValue(speed[FPSTR(_transitionDuration)], transitionDuration);
+
+        return configComplete;
+    }
+
+    void appendConfigData(Print& uiScript) override
+    {   
+        uiScript.print(F("addInfo('DRV8833-motor-driver:modes:slow-decay',1,'<br /><i style=\"color:#7AB6FF;\">Slow Decay: Stops the motor quicker by providing active braking from the power generated from the motor</i><br /><i style=\"color:#FFAA00;\">Has a lower minimum RPM. RPM increase is more linear</i>');"));
+        uiScript.print(F("addInfo('DRV8833-motor-driver:modes:fast-decay',1,'<br /><i style=\"color:#7AB6FF;\">Fast Decay: Stops the motor slower by letting it coast</i><br /><i style=\"color:#FFAA00;\">Has a higher minimum RPM. RPM increase is less linear)"));
     }
 };
 

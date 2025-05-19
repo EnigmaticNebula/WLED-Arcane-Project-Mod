@@ -224,7 +224,7 @@ class LEDToggleUsermod : public Usermod
             {
                 if (LEDLastState == LOW) 
                 {
-                    Serial.println("LED ON");
+                    //Serial.println("LED ON");
                     if (blueLedEnabled == true)
                     {
                         adjustLedBrightness(0, blueLedBrightness, transitionTime, BLUE_LED_PWM_CHANNEL);
@@ -307,7 +307,6 @@ class LEDToggleUsermod : public Usermod
 
     void addToConfig(JsonObject& root) override
     {   
-
         JsonObject top = root.createNestedObject(FPSTR(_name));
         top[FPSTR(_resetDefaults)] = resetDefaults;
         
@@ -354,7 +353,7 @@ class LEDToggleUsermod : public Usermod
 
     bool readFromConfig(JsonObject& root) override
     {   
-        Serial.begin(115200);
+        //Serial.begin(115200);
 
         JsonObject top = root[FPSTR(_name)];
         JsonObject ledToggles = top[FPSTR(_toggles)];
