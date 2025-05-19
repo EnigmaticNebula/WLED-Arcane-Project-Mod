@@ -37,8 +37,34 @@ class DRV8833DriverUsermod : public Usermod {
     bool backwards = false;
     bool motorLastState = LOW;
     bool enabled = true;
+    bool resetDefaults = false;
     int motorSpeed = 255;
     int transitionDuration = 1;
+
+    static const bool defSlowDecay = true;
+    static const bool defFastDecay = false;
+    static const bool defForwards = true;
+    static const bool defBackwards = false;
+    static const bool defEnabled = true;
+    static const int defMotorSpeed = 255;
+    static const int defTransitionDuration = 1;
+
+    bool defFastDecay = false;
+
+
+    static const char _name[];
+    static const char _modes[];
+    static const char _speed[];
+
+    static const char _resetDefaults[];
+    static const char _enabled[];
+
+    static const char _motorSpeed[];
+    static const char _slowDecay[];
+    static const char _fastDecay[];
+    static const char _forwards[];
+    static const char _backwards[];
+    static const char _transitionDuration[];
 
     public:
 
@@ -143,17 +169,71 @@ class DRV8833DriverUsermod : public Usermod {
                 if (motorLastState == LOW && enabled == true)
                 {
                     motorToggle(forwards, backwards, slowDecay, fastDecay, 0, motorSpeed, transitionDuration);
+                    motorLastState = HIGH;
                 }
 
                 else if (motorLastState == HIGH && enabled == true)
                 {
                     motorToggle(forwards, backwards, slowDecay, fastDecay, motorSpeed, 1, transitionDuration);
+                    motorLastState = LOW;
                 }
+
             }
         }
 
+        buttonLastSteadyState = buttonCurrentState;
+    }
 
+    void addToConfig(JsonObject& root) override
+    {
+    JsonObject top = root.createNestedObject(FPSTR(_name));
+    top[FPSTR(_enabled)] = enabled;
+    top[FPSTR(_resetDefaults)] = resetDefaults;
 
+    JsonObject motorModes = top.createNestedObject(FPSTR(_modes));
+    motorModes[FPSTR(_fastDecay)] = fastDecay;
+    motorModes[FPSTR(_slowDecay)] = slowDecay;
+    motorModes[FPSTR(_forwards)] = forwards;
+    motorModes[FPSTR(_backwards)] = backwards;
+
+    JsonObject speed = top.createNestedObject(FPSTR(_speed));
+    speed[FPSTR(_motorSpeed)] = motorSpeed;
+    speed[FPSTR(_transitionDuration)] = transitionDuration;
+
+    if (resetDefaults == true)
+    {
+        top[FPSTR(_enabled)] = defEnabled;
+        top[FPSTR(_resetDefaults)] = false;
+        motorModes[FPSTR(_fastDecay)] = defFastDecay;
+        motorModes[FPSTR(_slowDecay)] = defSlowDecay;
+        motorModes[FPSTR(_forwards)] = defForwards;
+        motorModes[FPSTR(_backwards)] = defBackwards;
+        speed[FPSTR(_motorSpeed)] = defMotorSpeed;
+        speed[FPSTR(_transitionDuration)] = defTransitionDuration;
+    }
+
+    bool readFromConfig(JsonObject& root) override
+    {
+        JsonObject top = root[FPSTR(_name)];
+        JsonObject motorModes = top[FPSTR(_modes)];
+        JsonObjcet speed = top[FPSTR(_speed)];
+
+        bool configComplete = !top,isNull();
 
     }
 };
+
+
+const char DRV8833DriverUsermod::_name[]                PROGMEM = "DRV8833-motor-driver";
+const char DRV8833DriverUsermod::_modes[]               PROGMEM = "modes";
+const char DRV8833DriverUsermod::_speed[]               PROGMEM = "speed-settings";
+
+const char DRV8833DriverUsermod::_resetDefaults[]       PROGMEM = "reset-to-defaults";
+const char DRV8833DriverUsermod::_enabled[]             PROGMEM = "enabled";
+
+const char DRV8833DriverUsermod::_motorSpeed[]          PROGMEM = "motor-speed";
+const char DRV8833DriverUsermod::_slowDecay[]           PROGMEM = "slow-decay";
+const char DRV8833DriverUsermod::_fastDecay[]           PROGMEM = "fast-decay";
+const char DRV8833DriverUsermod::_forwards[]            PROGMEM = "forwards";
+const char DRV8833DriverUsermod::_backwards[]           PROGMEM = "backwards";
+const char DRV8833DriverUsermod::_transitionDuration[]  PROGMEM = "motor-transition-time";
