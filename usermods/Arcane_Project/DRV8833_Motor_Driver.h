@@ -6,9 +6,9 @@
 
 // Pin definitions (Corresponds to the GPIO pins)
 // If changing pins, consult ESP32 docs to check what pins to use
+#define AIN1_PIN 25
+#define AIN2_PIN 26
 #define SLP_PIN 27
-#define AIN1_PIN 26
-#define AIN2_PIN 25
 #define MOTOR_BUTTON_PIN 33
 
 // PWM definitions

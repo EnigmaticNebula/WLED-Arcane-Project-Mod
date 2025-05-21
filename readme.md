@@ -2,6 +2,11 @@
 
 This is a modification of WLED for use in my project based on the series "Arcane". In this modification, I added 3 more custom usermods that are used to control the individual features on the model I'm making.
 
+<p align="centre">
+  <img src="/images/arcane-project-model.png">
+</p>
+
+
 ## Usermod Info:
 
 ### LED Toggle
@@ -14,7 +19,7 @@ This plays a jingle through a passive piezoelectric buzzer on startup. Currently
 
 ### Motor Control
 
-This uses PWM signals to control a motor. It is currently unfinished and in development. It will be designed for the **Adafruit DRV8833 DC Motor Driver**.
+This uses PWM signals to control a motor with the **Adafruit DRV8833 Motor Driver**. It allows you to adjust the motor speed and change the decay mode and direction. 
 
 ## Usermod Features:
 
@@ -43,7 +48,15 @@ This uses PWM signals to control a motor. It is currently unfinished and in deve
   - Enable/Disable
 
 ### Motor Control
-TBA
+- Full control over motors
+- Uses the DRV8833 motor driver
+- Motor can be toggles via an external button
+- Usermod settings:
+  - Choose between fast and slow decay modes
+  - Choose between forwards and reverse
+  - Motor speed
+  - Adjust transition time between motor speeds and states
+  - Reset to defaults
 
 <p align="center">
   <img src="/images/wled_logo_akemi.png">

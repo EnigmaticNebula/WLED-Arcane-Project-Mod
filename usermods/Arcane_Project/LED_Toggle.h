@@ -6,7 +6,7 @@
 
 // Pin definitions (Corresponds to the GPIO pins)
 // If changing pins, consult ESP32 docs to check what pins to use
-#define BLUE_LED_PIN 17
+#define BLUE_LED_PIN 5
 #define LED_FIL1_PIN 18
 #define LED_FIL2_PIN 19
 #define LED_BUTTON_PIN 21
