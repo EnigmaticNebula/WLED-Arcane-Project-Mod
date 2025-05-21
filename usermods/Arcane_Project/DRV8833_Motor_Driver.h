@@ -6,6 +6,7 @@
 
 // Pin definitions (Corresponds to the GPIO pins)
 // If changing pins, consult ESP32 docs to check what pins to use
+#define SLP_PIN 27
 #define AIN1_PIN 26
 #define AIN2_PIN 25
 #define MOTOR_BUTTON_PIN 33
@@ -28,8 +29,9 @@ class DRV8833MotorDriver : public Usermod
     // -------------- CONFIG VALUES -------------- //
 
     bool resetDefaults = false;
-    bool enabled = true;
-    bool enabledLastState = true;
+
+    bool motorEnabled = true;
+    bool motorEnabledLastState = true;
     bool motorRecentlyEnabled = false;
     bool motorRecentlyDisabled = false;
 
@@ -38,10 +40,6 @@ class DRV8833MotorDriver : public Usermod
     int buttonCurrentState;
     unsigned long lastDebounceTime = 0; 
     int motorLastState = LOW;
-    
-    int motorSpeed = 255;
-    int motorLastSpeed = 255;
-    int transitionDuration = 1;
 
     bool forwards = true;
     bool backwards = false;
@@ -54,8 +52,11 @@ class DRV8833MotorDriver : public Usermod
     bool fastDecayLastState = true;
     bool slowDecayLastState = false;
     bool motorLastMode = 2;
-
     bool motorModeRecentlyChanged = false;
+    
+    int motorSpeed = 255;
+    int motorLastSpeed = 255;
+    int transitionDuration = 1;
 
     static const int defMotorSpeed = 255;
     static const bool defForwards = true;
@@ -73,15 +74,15 @@ class DRV8833MotorDriver : public Usermod
     static const char _speed[];
 
     static const char _resetDefaults[];
-    static const char _enabled[];
+    static const char _motorEnabled[];
 
     static const char _motorSpeed[];
     static const char _transitionDuration[];
+
     static const char _forwards[];
     static const char _backwards[];
     static const char _fastDecay[];
     static const char _slowDecay[];
-
 
     public:
 
@@ -92,6 +93,7 @@ class DRV8833MotorDriver : public Usermod
         pinMode(MOTOR_BUTTON_PIN, INPUT_PULLUP);
         pinMode(AIN1_PIN, OUTPUT);
         pinMode(AIN2_PIN, OUTPUT);
+        pinMode(SLP_PIN, OUTPUT);
 
         // PWM
         ledcSetup(AIN1_PIN, PWM_FREQ, PWM_RES);
@@ -99,40 +101,48 @@ class DRV8833MotorDriver : public Usermod
         ledcAttachPin(AIN1_PIN, AIN1_PWM_CHANNEL);
         ledcAttachPin(AIN2_PIN, AIN2_PWM_CHANNEL);
 
+        digitalWrite(SLP_PIN, HIGH);
+
         initDone = true;
     }
 
     int assignMotorSpeed(int motorSpeed)
     {
-        if (motorSpeed <= 255)
-        {
-            return motorSpeed;
-        }
-
-        else
-        {
-            return 255;
-        }
+        if (motorSpeed <= 255) return motorSpeed;
+        else return 255;
     }
 
-    bool turnOffDisabledMotor(bool enabled, bool motorRecentlyDisabled, int speed, int mode, int transitionDuration, int pwmChannel)
+    bool turnOffDisabledMotor(bool motorEnabled, bool motorRecentlyDisabled, int speed, int mode, int transitionDuration)
     {
-        if (enabled == false && motorRecentlyDisabled == true && motorLastState == HIGH)
+        if (motorEnabled == false && motorRecentlyDisabled == true && motorLastState == HIGH && (mode == 1 || mode == 4))
         {
-            adjustMotorSpeed(speed, 0, transitionDuration, pwmChannel);
+            adjustMotorSpeed(speed, 0, transitionDuration, AIN1_PWM_CHANNEL);
+        }
+
+        else if (motorEnabled == false && motorRecentlyDisabled == true && motorLastState == HIGH && (mode == 2 || mode == 3))
+        {
+            adjustMotorSpeed(speed, 0, transitionDuration, AIN2_PWM_CHANNEL);
+        }
+
+        return false;
+    }
+
+    bool turnOnEnabledMotor(bool motorEnabled, bool motorRecentlyEnabled, int speed, int mode, int transitionDuration)
+    {
+        if (motorEnabled == true && motorRecentlyEnabled == true && motorLastState == HIGH && (mode == 1 || mode == 4))
+        {
+            adjustMotorSpeed(0, speed, transitionDuration, AIN1_PWM_CHANNEL);
+        }
+
+        else if (motorEnabled == true && motorRecentlyEnabled == true && motorLastState == HIGH && (mode == 2 || mode == 3))
+        {
+            adjustMotorSpeed(0, speed, transitionDuration, AIN2_PWM_CHANNEL);
         }
         return false;
     }
 
-    bool turnOnEnabledLed(bool enabled, bool motorRecentlyEnabled, int speed, int mode, int transitionDuration, int pwmChannel)
-    {
-        if (enabled == true && motorRecentlyEnabled == true && motorLastState == HIGH)
-        {
-            adjustMotorSpeed(0, speed, transitionDuration, pwmChannel);
-        }
-        return false;
-    }
 
+    // Gives an identifier to each decay, direction setting combination
     int getModeIdentifier(bool forwards, bool backwards, bool fastDecay, bool slowDecay)
     {
         if (forwards == true && fastDecay == true && backwards == false && slowDecay == false) return 1;
@@ -186,6 +196,18 @@ class DRV8833MotorDriver : public Usermod
         else return false;
     }
 
+    bool recentlyDisabled(bool motorEnabled, bool motorEnabledLastState)
+    {
+        if (motorEnabled == false && motorEnabledLastState == true) return true;
+        else return false;
+    }
+
+    bool recentlyEnabled(bool motorEnabled, bool motorEnabledLastState)
+    {
+        if (motorEnabled == true && motorEnabledLastState == false) return true;
+        else return false;
+    }
+
     bool validMode(bool forwards, bool backwards, bool fastDecay, bool slowDecay)
     {
         if (forwards == true && fastDecay == true && backwards == false && slowDecay == false) return true;
@@ -195,29 +217,11 @@ class DRV8833MotorDriver : public Usermod
         else return false;
     }
 
-    bool recentlyDisabled(bool enabled, bool enabledLastState)
-    {
-        if (enabled == false && enabledLastState == true) return true;
-        else return false;
-    }
-
-    bool recentlyEnabled(bool enabled, bool enabledLastState)
-    {
-        if (enabled == true && enabledLastState == false) return true;
-        else return false;
-    }
-
     void loop() 
     {   
 
-        // blueLedRecentlyDisabled = turnOffDisabledLed(blueLedEnabled, blueLedRecentlyDisabled, blueLedBrightness, transitionDuration, BLUE_LED_PWM_CHANNEL);
-        // ledFil1RecentlyDisabled = turnOffDisabledLed(ledFil1Enabled, ledFil1RecentlyDisabled, ledFil1Brightness, transitionDuration, LED_FIL1_PWM_CHANNEL);
-        // ledFil2RecentlyDisabled = turnOffDisabledLed(ledFil2Enabled, ledFil2RecentlyDisabled, ledFil2Brightness, transitionDuration, LED_FIL2_PWM_CHANNEL);
-
-        // blueLedRecentlyEnabled = turnOnEnabledLed(blueLedEnabled, blueLedRecentlyEnabled, blueLedBrightness, transitionDuration, BLUE_LED_PWM_CHANNEL);
-        // ledFil1RecentlyEnabled = turnOnEnabledLed(ledFil1Enabled, ledFil1RecentlyEnabled, ledFil1Brightness, transitionDuration, LED_FIL1_PWM_CHANNEL);
-        // ledFil2RecentlyEnabled = turnOnEnabledLed(ledFil2Enabled, ledFil2RecentlyEnabled, ledFil2Brightness, transitionDuration, LED_FIL2_PWM_CHANNEL);
-
+        motorRecentlyDisabled = turnOffDisabledMotor(motorEnabled, motorRecentlyDisabled, motorSpeed, motorMode, transitionDuration);
+        motorRecentlyEnabled = turnOnEnabledMotor(motorEnabled, motorRecentlyEnabled, motorSpeed, motorMode, transitionDuration);
 
         buttonCurrentState = digitalRead(LED_BUTTON_PIN);
 
@@ -236,23 +240,22 @@ class DRV8833MotorDriver : public Usermod
             {
                 if (motorLastState == LOW) 
                 {
-                    //Serial.println("LED ON");
-                    if (forwards == true && fastDecay == true)
+                    if (motorMode == 1)
                     {
                         ledcWrite(AIN2_PWM_CHANNEL, 0);
                         adjustMotorSpeed(0, motorSpeed, transitionDuration, AIN1_PWM_CHANNEL);
                     }
-                    else if (forwards == true && slowDecay == true)
+                    else if (motorMode == 2)
                     {
                         ledcWrite(AIN1_PWM_CHANNEL, 255);
                         adjustMotorSpeed(0, motorSpeed, transitionDuration, AIN2_PWM_CHANNEL);
                     }
-                    else if (backwards == true && fastDecay == true)
+                    else if (motorMode == 3)
                     {   
                         ledcWrite(AIN1_PWM_CHANNEL, 0);
                         adjustMotorSpeed(0, motorSpeed, transitionDuration, AIN2_PWM_CHANNEL);
                     }
-                    else if (backwards == true && slowDecay == true)
+                    else if (motorMode == 4)
                     {
                         ledcWrite(AIN2_PWM_CHANNEL, 255);
                         adjustMotorSpeed(0, motorSpeed, transitionDuration, AIN1_PWM_CHANNEL);
@@ -264,22 +267,22 @@ class DRV8833MotorDriver : public Usermod
                 else if (motorLastState == HIGH) 
                 {
                     
-                    if (forwards == true && fastDecay == true)
+                    if (motorMode == 1)
                     {
                         ledcWrite(AIN2_PWM_CHANNEL, 0);
                         adjustMotorSpeed(motorSpeed, 0, transitionDuration, AIN1_PWM_CHANNEL);
                     }
-                    else if (forwards == true && slowDecay == true)
+                    else if (motorMode == 2)
                     {
                         ledcWrite(AIN1_PWM_CHANNEL, 255);
                         adjustMotorSpeed(motorSpeed, 0, transitionDuration, AIN2_PWM_CHANNEL);
                     }
-                    else if (backwards == true && fastDecay == true)
+                    else if (motorMode == 3)
                     {   
                         ledcWrite(AIN1_PWM_CHANNEL, 0);
                         adjustMotorSpeed(motorSpeed, 0, transitionDuration, AIN2_PWM_CHANNEL);
                     }
-                    else if (backwards == true && slowDecay == true)
+                    else if (motorMode == 4)
                     {
                         ledcWrite(AIN2_PWM_CHANNEL, 255);
                         adjustMotorSpeed(motorSpeed, 0, transitionDuration, AIN1_PWM_CHANNEL);
@@ -337,10 +340,9 @@ class DRV8833MotorDriver : public Usermod
     {   
         JsonObject top = root.createNestedObject(FPSTR(_name));
         top[FPSTR(_resetDefaults)] = resetDefaults;
-        top[FPSTR(_enabled)] = enabled;
+        top[FPSTR(_motorEnabled)] = motorEnabled;
         
         JsonObject modes = top.createNestedObject(FPSTR(_modes));
-
         if (validMode(forwards, backwards, fastDecay, slowDecay) == true)
         {
             modes[FPSTR(_forwards)] = forwards;
@@ -365,7 +367,7 @@ class DRV8833MotorDriver : public Usermod
         if (resetDefaults == true)
         {
             top[FPSTR(_resetDefaults)] = false;
-            top[FPSTR(_enabled)] = true;
+            top[FPSTR(_motorEnabled)] = true;
             modes[FPSTR(_forwards)] = defForwards;
             modes[FPSTR(_backwards)] = defBackwards;
             modes[FPSTR(_fastDecay)] = defFastDecay;
@@ -401,6 +403,7 @@ class DRV8833MotorDriver : public Usermod
         JsonObject speed = top[FPSTR(_speed)];
 
         bool configComplete = !top,isNull();
+
         if (validMode(forwards, backwards, fastDecay, slowDecay) == true)
         {
             if (forwardsLastState != forwards) forwardsLastState = forwards;
@@ -410,11 +413,11 @@ class DRV8833MotorDriver : public Usermod
             motorLastMode = getModeIdentifier(forwardsLastState, backwardsLastState, fastDecayLastState, slowDecayLastState);
         }
 
-        enabledLastState = enabled;
+        motorEnabledLastState = motorEnabled;
 
         //Assigns the saved values from the cfg.json file to its corresponding variable
         configComplete &= getJsonValue(top[FPSTR(_resetDefaults)], resetDefaults);
-        configComplete &= getJsonValue(top[FPSTR(_enabled)], enabled);
+        configComplete &= getJsonValue(top[FPSTR(_motorEnabled)], motorEnabled);
 
         configComplete &= getJsonValue(modes[FPSTR(_forwards)], forwards);
         configComplete &= getJsonValue(modes[FPSTR(_backwards)], backwards);
@@ -426,17 +429,16 @@ class DRV8833MotorDriver : public Usermod
 
         motorMode = getModeIdentifier(forwards, backwards, fastDecay, slowDecay);
         motorModeRecentlyChanged = modeRecentlyChanged(motorMode, motorLastMode);
-        
 
-        motorRecentlyEnabled = recentlyEnabled(enabled, enabledLastState);
-        motorRecentlyDisabled = recentlyDisabled(enabled, enabledLastState);
+        motorRecentlyDisabled = recentlyDisabled(motorEnabled, motorEnabledLastState);
+        motorRecentlyEnabled = recentlyEnabled(motorEnabled, motorEnabledLastState);
         
         if (initDone == true)
         {   
-            // Note: It would make sense to put the LEDLastState condition in the first if statement, however this breaks the program.
+            // Note: It would make sense to put the motorLastState condition in the first if statement, however this breaks the program.
             // also these if statements are disgusting but oh well. i might fix them in the future
-            if (enabled == true && (motorLastSpeed != motorSpeed) && motorLastState == HIGH && ((forwards == true && fastDecay == true) || (backwards == true && slowDecay == true))) adjustMotorSpeed(motorLastSpeed, motorSpeed, transitionDuration, AIN1_PWM_CHANNEL);
-            if (enabled == true && (motorLastSpeed != motorSpeed) && motorLastState == HIGH && ((backwards == true && fastDecay == true) || (forwards == true && slowDecay == true))) adjustMotorSpeed(motorLastSpeed, motorSpeed, transitionDuration, AIN2_PWM_CHANNEL);
+            if (motorEnabled == true && (motorLastSpeed != motorSpeed) && motorLastState == HIGH && ((forwards == true && fastDecay == true) || (backwards == true && slowDecay == true))) adjustMotorSpeed(motorLastSpeed, motorSpeed, transitionDuration, AIN1_PWM_CHANNEL);
+            if (motorEnabled == true && (motorLastSpeed != motorSpeed) && motorLastState == HIGH && ((backwards == true && fastDecay == true) || (forwards == true && slowDecay == true))) adjustMotorSpeed(motorLastSpeed, motorSpeed, transitionDuration, AIN2_PWM_CHANNEL);
         }
 
         return configComplete;
@@ -452,13 +454,12 @@ class DRV8833MotorDriver : public Usermod
     // this section causes me great mental pain sometimes. sometimes adding something here breaks it entirely either due to exceeding the buffer or something else. edit at your own risk
     // this is used to add text before or after settings. useful for adding info/clarification
 
-    // void appendConfigData(Print& uiScript) override
-    // {
-    //     uiScript.print(F("addInfo('LEDToggle:enable-LEDs:LED-filament-2',1,'<br /><i style=\"color:#7AB6FF;\">The on/off state of disabled LEDs will still change with button presses to prevent any desynchronisation</i>');"));
-    //     uiScript.print(F("addInfo('LEDToggle:LED-brightnesses:LED-filament-2-rightness',1,'<br /><i style=\"color:#7AB6FF;\">Input integer values up to 255</i><br /><i style=\"color:#FFAA00;\">Values greater than 255 will be interpreted as 255</i><br /><i style=\"color:#FFAA00;\">Decimal values will be truncated to just their integer components</i>');"));
-    //     uiScript.print(F("addInfo('LEDToggle:reset-to-defaults',1,'<br /><i style=\"color:#FF2e2e;\">WILL RESET WITHOUT CONFIRMATION!</i>');"));
-    //     uiScript.print(F("addInfo('LEDToggle:LED-brightnesses:LED-transition-time',1,'s');"));
-    // }
+    void appendConfigData(Print& uiScript) override
+    {
+        uiScript.print(F("addInfo('MotorDriver:reset-to-defaults',1,'<br /><i style=\"color:#FF2e2e;\">WILL RESET WITHOUT CONFIRMATION!</i>');"));
+        uiScript.print(F("addInfo('MotorDriver:motor-speed:speed',1,'<br /><i style=\"color:#7AB6FF;\">Input integer values up to 255</i><br /><i style=\"color:#FFAA00;\">Values greater than 255 will be interpreted as 255</i><br /><i style=\"color:#FFAA00;\">Decimal values will be truncated to just their integer components</i>');"));
+        uiScript.print(F("addInfo('MotorDirver:motor-modes:slow-decay',1,'<br /><i style=\"color:#7AB6FF;\">Fast Decay: Motor stops slower. Higher minimum RPM<br />Slow Decay: Active braking used, so motor stops faster. Lower minimum RPM</i>');"));
+    }
 };
 
 // -------------------- Strings used to reduce flash memory usage -------------------- //
@@ -468,12 +469,12 @@ const char DRV8833MotorDriver::_modes[]                PROGMEM = "motor-modes";
 const char DRV8833MotorDriver::_speed[]                PROGMEM = "motor-speed";
 
 const char DRV8833MotorDriver::_resetDefaults[]        PROGMEM = "reset-to-defaults";
-const char DRV8833MotorDriver::_enabled[]              PROGMEM = "enabled";
+const char DRV8833MotorDriver::_motorEnabled[]         PROGMEM = "motorEnabled";
 
 const char DRV8833MotorDriver::_forwards[]             PROGMEM = "forwards";
 const char DRV8833MotorDriver::_backwards[]            PROGMEM = "backwards";
 const char DRV8833MotorDriver::_fastDecay[]            PROGMEM = "fast-decay";
 const char DRV8833MotorDriver::_slowDecay[]            PROGMEM = "slow-decay";
 
-const char DRV8833MotorDriver::_motorSpeed[]           PROGMEM = "motor-speed";
+const char DRV8833MotorDriver::_motorSpeed[]           PROGMEM = "speed";
 const char DRV8833MotorDriver::_transitionDuration[]   PROGMEM = "transition-duration";
