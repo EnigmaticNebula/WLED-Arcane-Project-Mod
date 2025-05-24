@@ -27,8 +27,6 @@ class LEDToggleUsermod : public Usermod
 {
     private:
 
-    // -------------- CONFIG VALUES -------------- //
-
     bool resetDefaults = false;
 
     int buttonLastSteadyState = LOW; // Last normal button state
@@ -112,6 +110,18 @@ class LEDToggleUsermod : public Usermod
 
         initDone = true;
     }
+
+    // This is here for when I decide to do refactoring of this mod
+    // struct led {
+    //     bool enabled = true;
+    //     bool lastState = true;
+    //     bool recentlyEnabled = false;
+    //     bool recentlyDisabled = false;
+    //     int brightness = 255;
+    //     int lastBrightness = 255;
+    //     int defBrightness = 255;
+    //     bool defEnabled = true;
+    // };
 
     int assignLedBrightness(const char _ledBrightness[], int ledBrightness)
     {
@@ -219,7 +229,6 @@ class LEDToggleUsermod : public Usermod
         // Runs on valid button toggle
         if ((millis() - lastDebounceTime) > DEBOUNCE_TIME) 
         {
-            // Toggle on
             if (buttonLastSteadyState == HIGH && buttonCurrentState == LOW) 
             {
                 if (LEDLastState == LOW) 
