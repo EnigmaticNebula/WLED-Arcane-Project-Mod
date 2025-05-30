@@ -11,7 +11,7 @@
 // PWM definitions
 // As a guideline, keep PWM_FREQ * (2^PWM_RES) below 80MHz. Higher PWM_FREQ means less resolution.
 #define BUZZER_PWM_FREQ 2000 // Up to 40MHz
-#define BUZZER_PWM_RES 13    // Up to 16 bits
+#define BUZZER_PWM_RES 8    // Up to 16 bits
 #define BUZZER_PWM_CHANNEL 3 // Up to 16 channels, starting from 0. Don't use channels that are already in use
 
 
