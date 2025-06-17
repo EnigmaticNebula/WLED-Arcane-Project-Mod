@@ -6,22 +6,28 @@
 
 // Pin definitions (Corresponds to the GPIO pins)
 // If changing pins, consult ESP32 docs to check what pins to use
-#define BLUE_LED_PIN 5
-#define LED_FIL1_PIN 18
-#define LED_FIL2_PIN 19
 #define LED_BUTTON_PIN 21
 
 // PWM definitions
 // As a guideline, keep PWM_FREQ * (2^PWM_RES) below 80MHz. Higher PWM_FREQ means less resolution.
 #define PWM_FREQ 5000 // Up to 40MHz.
 #define PWM_RES 8 // Up to 16 bits.
-#define BLUE_LED_PWM_CHANNEL 0 // Up to 16 channels, starting from 0. Don't use channels that are already in use
-#define LED_FIL1_PWM_CHANNEL 1
-#define LED_FIL2_PWM_CHANNEL 2
 
 // Debounce
 #define DEBOUNCE_TIME 50 // Time between button toggles that is considered anomalous
 
+struct led {
+    bool enabled;
+    bool lastState;
+    bool recentlyEnabled;
+    bool recentlyDisabled;
+    int brightness;
+    int lastBrightness;
+    int defBrightness;
+    bool defEnabled;
+    int pin;
+    int pwmChannel; // Up to 16 channels, starting from 0. Don't use channels that are already in use
+};
 
 class LEDToggleUsermod : public Usermod 
 {
@@ -34,40 +40,13 @@ class LEDToggleUsermod : public Usermod
     int buttonCurrentState;
     unsigned long lastDebounceTime = 0; 
     int LEDLastState = LOW;
-    
-    bool blueLedEnabled = true;
-    bool ledFil1Enabled = true;
-    bool ledFil2Enabled = true;
-
-    bool blueLedLastState = true;
-    bool ledFil1LastState = true;
-    bool ledFil2LastState = true;
-
-    bool blueLedRecentlyEnabled = false;
-    bool ledFil1RecentlyEnabled = false;
-    bool ledFil2RecentlyEnabled = false;
-
-    bool blueLedRecentlyDisabled = false;
-    bool ledFil1RecentlyDisabled = false;
-    bool ledFil2RecentlyDisabled = false;
-
-    int blueLedBrightness = 255;
-    int ledFil1Brightness = 255;
-    int ledFil2Brightness = 255;
-
-    int blueLedLastBrightness = 255;
-    int ledFil1LastBrightness = 255;
-    int ledFil2LastBrightness = 255;
 
     int transitionDuration = 1;
-
-    static const int defBlueLedBrightness = 255;
-    static const int defLedFil1Brightness = 255;
-    static const int defLedFil2Brightness = 255;
-    static const bool defBlueLedEnabled = true;
-    static const bool defLedFil1Enabled = true;
-    static const bool defLedFil2Enabled = true;
     static const bool defTransitionDuration = 1; // Measured in seconds
+
+    led blueLed {true, true, false, false, 255, 255, 255, true, 5, 0};
+    led ledFil1 {true, true, false, false, 255, 255, 255, true, 18, 1};
+    led ledFil2 {true, true, false, false, 255, 255, 255, true, 19, 2};
 
     bool initDone = false;
 
@@ -96,32 +75,20 @@ class LEDToggleUsermod : public Usermod
     {
         // Pins
         pinMode(LED_BUTTON_PIN, INPUT_PULLUP);
-        pinMode(BLUE_LED_PIN, OUTPUT);
-        pinMode(LED_FIL1_PIN, OUTPUT);
-        pinMode(LED_FIL2_PIN, OUTPUT);
+        pinMode(blueLed.pin, OUTPUT);
+        pinMode(ledFil1.pin, OUTPUT);
+        pinMode(ledFil2.pin, OUTPUT);
 
         // PWM
-        ledcSetup(BLUE_LED_PWM_CHANNEL, PWM_FREQ, PWM_RES);
-        ledcSetup(LED_FIL1_PWM_CHANNEL, PWM_FREQ, PWM_RES);
-        ledcSetup(LED_FIL2_PWM_CHANNEL, PWM_FREQ, PWM_RES);
-        ledcAttachPin(BLUE_LED_PIN, BLUE_LED_PWM_CHANNEL);
-        ledcAttachPin(LED_FIL1_PIN, LED_FIL1_PWM_CHANNEL);
-        ledcAttachPin(LED_FIL2_PIN, LED_FIL2_PWM_CHANNEL);
+        ledcSetup(blueLed.pwmChannel, PWM_FREQ, PWM_RES);
+        ledcSetup(ledFil1.pwmChannel, PWM_FREQ, PWM_RES);
+        ledcSetup(ledFil2.pwmChannel, PWM_FREQ, PWM_RES);
+        ledcAttachPin(blueLed.pin, blueLed.pwmChannel);
+        ledcAttachPin(ledFil1.pin, ledFil1.pwmChannel);
+        ledcAttachPin(ledFil2.pin, ledFil2.pwmChannel);
 
         initDone = true;
     }
-
-    // This is here for when I decide to do refactoring of this mod
-    // struct led {
-    //     bool enabled = true;
-    //     bool lastState = true;
-    //     bool recentlyEnabled = false;
-    //     bool recentlyDisabled = false;
-    //     int brightness = 255;
-    //     int lastBrightness = 255;
-    //     int defBrightness = 255;
-    //     bool defEnabled = true;
-    // };
 
     int assignLedBrightness(const char _ledBrightness[], int ledBrightness)
     {
@@ -208,13 +175,12 @@ class LEDToggleUsermod : public Usermod
     void loop() 
     {   
 
-        blueLedRecentlyDisabled = turnOffDisabledLed(blueLedEnabled, blueLedRecentlyDisabled, blueLedBrightness, transitionDuration, BLUE_LED_PWM_CHANNEL);
-        ledFil1RecentlyDisabled = turnOffDisabledLed(ledFil1Enabled, ledFil1RecentlyDisabled, ledFil1Brightness, transitionDuration, LED_FIL1_PWM_CHANNEL);
-        ledFil2RecentlyDisabled = turnOffDisabledLed(ledFil2Enabled, ledFil2RecentlyDisabled, ledFil2Brightness, transitionDuration, LED_FIL2_PWM_CHANNEL);
-
-        blueLedRecentlyEnabled = turnOnEnabledLed(blueLedEnabled, blueLedRecentlyEnabled, blueLedBrightness, transitionDuration, BLUE_LED_PWM_CHANNEL);
-        ledFil1RecentlyEnabled = turnOnEnabledLed(ledFil1Enabled, ledFil1RecentlyEnabled, ledFil1Brightness, transitionDuration, LED_FIL1_PWM_CHANNEL);
-        ledFil2RecentlyEnabled = turnOnEnabledLed(ledFil2Enabled, ledFil2RecentlyEnabled, ledFil2Brightness, transitionDuration, LED_FIL2_PWM_CHANNEL);
+        blueLed.recentlyDisabled = turnOffDisabledLed(blueLed.enabled, blueLed.recentlyDisabled, blueLed.brightness, transitionDuration, blueLed.pwmChannel);
+        ledFil1.recentlyDisabled = turnOffDisabledLed(ledFil1.enabled, ledFil1.recentlyDisabled, ledFil1.brightness, transitionDuration, ledFil1.pwmChannel);
+        ledFil2.recentlyDisabled = turnOffDisabledLed(ledFil2.enabled, ledFil2.recentlyDisabled, ledFil2.brightness, transitionDuration, ledFil2.pwmChannel);
+        blueLed.recentlyEnabled = turnOnEnabledLed(blueLed.enabled, blueLed.recentlyEnabled, blueLed.brightness, transitionDuration, blueLed.pwmChannel);
+        ledFil1.recentlyEnabled = turnOnEnabledLed(ledFil1.enabled, ledFil1.recentlyEnabled, ledFil1.brightness, transitionDuration, ledFil1.pwmChannel);
+        ledFil2.recentlyEnabled = turnOnEnabledLed(ledFil2.enabled, ledFil2.recentlyEnabled, ledFil2.brightness, transitionDuration, ledFil2.pwmChannel);
 
 
         buttonCurrentState = digitalRead(LED_BUTTON_PIN);
@@ -234,17 +200,17 @@ class LEDToggleUsermod : public Usermod
                 if (LEDLastState == LOW) 
                 {
                     //Serial.println("LED ON");
-                    if (blueLedEnabled == true)
+                    if (blueLed.enabled == true)
                     {
-                        adjustLedBrightness(0, blueLedBrightness, transitionDuration, BLUE_LED_PWM_CHANNEL);
+                        adjustLedBrightness(0, blueLed.brightness, transitionDuration, blueLed.pwmChannel);
                     }
-                    if (ledFil1Enabled == true)
+                    if (ledFil1.enabled == true)
                     {
-                        adjustLedBrightness(0, ledFil1Brightness, transitionDuration, LED_FIL1_PWM_CHANNEL);
+                        adjustLedBrightness(0, ledFil1.brightness, transitionDuration, ledFil1.pwmChannel);
                     }
-                    if (ledFil2Enabled == true)
+                    if (ledFil2.enabled == true)
                     {
-                        adjustLedBrightness(0, ledFil2Brightness, transitionDuration, LED_FIL2_PWM_CHANNEL);
+                        adjustLedBrightness(0, ledFil2.brightness, transitionDuration, ledFil2.pwmChannel);
                     }
                     
                     LEDLastState = HIGH;
@@ -253,17 +219,17 @@ class LEDToggleUsermod : public Usermod
                 else if (LEDLastState == HIGH) 
                 {
                     
-                    if (blueLedEnabled == true)
+                    if (blueLed.enabled == true)
                     {
-                        adjustLedBrightness(blueLedBrightness, 0, transitionDuration, BLUE_LED_PWM_CHANNEL);
+                        adjustLedBrightness(blueLed.brightness, 0, transitionDuration, blueLed.pwmChannel);
                     }
-                    if (ledFil1Enabled == true)
+                    if (ledFil1.enabled == true)
                     {
-                        adjustLedBrightness(ledFil1Brightness, 0, transitionDuration, LED_FIL1_PWM_CHANNEL);
+                        adjustLedBrightness(ledFil1.brightness, 0, transitionDuration, ledFil1.pwmChannel);
                     }
-                    if (ledFil2Enabled == true)
+                    if (ledFil2.enabled == true)
                     {
-                        adjustLedBrightness(ledFil2Brightness, 0, transitionDuration, LED_FIL2_PWM_CHANNEL);
+                        adjustLedBrightness(ledFil2.brightness, 0, transitionDuration, ledFil2.pwmChannel);
                     }
 
                     LEDLastState = LOW;
@@ -320,25 +286,25 @@ class LEDToggleUsermod : public Usermod
         top[FPSTR(_resetDefaults)] = resetDefaults;
         
         JsonObject ledToggles = top.createNestedObject(FPSTR(_toggles));
-        ledToggles[FPSTR(_blueLed)] = blueLedEnabled;
-        ledToggles[FPSTR(_ledFil1)] = ledFil1Enabled;
-        ledToggles[FPSTR(_ledFil2)] = ledFil2Enabled;
+        ledToggles[FPSTR(_blueLed)] = blueLed.enabled;
+        ledToggles[FPSTR(_ledFil1)] = ledFil1.enabled;
+        ledToggles[FPSTR(_ledFil2)] = ledFil2.enabled;
 
         JsonObject bright = top.createNestedObject(FPSTR(_brightness));
-        bright[FPSTR(_blueLedBrightness)] = assignLedBrightness(_blueLedBrightness, blueLedBrightness);
-        bright[FPSTR(_ledFil1Brightness)] = assignLedBrightness(_ledFil1Brightness, ledFil1Brightness);
-        bright[FPSTR(_ledFil2Brightness)] = assignLedBrightness(_ledFil2Brightness, ledFil2Brightness);
+        bright[FPSTR(_blueLedBrightness)] = assignLedBrightness(_blueLedBrightness, blueLed.brightness);
+        bright[FPSTR(_ledFil1Brightness)] = assignLedBrightness(_ledFil1Brightness, ledFil1.brightness);
+        bright[FPSTR(_ledFil2Brightness)] = assignLedBrightness(_ledFil2Brightness, ledFil2.brightness);
         bright[FPSTR(_transitionTime)] = transitionDuration;
 
         if (resetDefaults == true)
         {
             top[FPSTR(_resetDefaults)] = false;
-            ledToggles[FPSTR(_blueLed)] = defBlueLedEnabled;
-            ledToggles[FPSTR(_ledFil1)] = defLedFil1Enabled;
-            ledToggles[FPSTR(_ledFil2)] = defLedFil2Enabled;
-            bright[FPSTR(_blueLedBrightness)] = defBlueLedBrightness;
-            bright[FPSTR(_ledFil1Brightness)] = defLedFil1Brightness;
-            bright[FPSTR(_ledFil2Brightness)] = defLedFil2Brightness;
+            ledToggles[FPSTR(_blueLed)] = blueLed.defEnabled;
+            ledToggles[FPSTR(_ledFil1)] = ledFil1.defEnabled;
+            ledToggles[FPSTR(_ledFil2)] = ledFil2.defEnabled;
+            bright[FPSTR(_blueLedBrightness)] = blueLed.defBrightness;
+            bright[FPSTR(_ledFil1Brightness)] = ledFil1.defBrightness;
+            bright[FPSTR(_ledFil2Brightness)] = ledFil2.defBrightness;
             bright[FPSTR(_transitionTime)] = defTransitionDuration;
         }
     }
@@ -370,39 +336,39 @@ class LEDToggleUsermod : public Usermod
 
         bool configComplete = !top,isNull();
 
-        blueLedLastState = blueLedEnabled;
-        ledFil1LastState = ledFil1Enabled;
-        ledFil2LastState = ledFil2Enabled;
-        blueLedLastBrightness = blueLedBrightness;
-        ledFil1LastBrightness = ledFil1Brightness;
-        ledFil2LastBrightness = ledFil2Brightness;
+        blueLed.lastState = blueLed.enabled;
+        ledFil1.lastState    = ledFil1.enabled;
+        ledFil2.lastState = ledFil2.enabled;
+        blueLed.lastBrightness = blueLed.brightness;
+        ledFil1.lastBrightness = ledFil1.brightness;
+        ledFil2.lastBrightness = ledFil2.brightness;
 
         //Assigns the saved values from the cfg.json file to its corresponding variable
         configComplete &= getJsonValue(top[FPSTR(_resetDefaults)], resetDefaults);
 
-        configComplete &= getJsonValue(ledToggles[FPSTR(_blueLed)], blueLedEnabled);
-        configComplete &= getJsonValue(ledToggles[FPSTR(_ledFil1)], ledFil1Enabled);
-        configComplete &= getJsonValue(ledToggles[FPSTR(_ledFil2)], ledFil2Enabled);
+        configComplete &= getJsonValue(ledToggles[FPSTR(_blueLed)], blueLed.enabled);
+        configComplete &= getJsonValue(ledToggles[FPSTR(_ledFil1)], ledFil1.enabled);
+        configComplete &= getJsonValue(ledToggles[FPSTR(_ledFil2)], ledFil2.enabled);
 
-        configComplete &= getJsonValue(bright[FPSTR(_blueLedBrightness)], blueLedBrightness);
-        configComplete &= getJsonValue(bright[FPSTR(_ledFil1Brightness)], ledFil1Brightness);
-        configComplete &= getJsonValue(bright[FPSTR(_ledFil2Brightness)], ledFil2Brightness);
+        configComplete &= getJsonValue(bright[FPSTR(_blueLedBrightness)], blueLed.brightness);
+        configComplete &= getJsonValue(bright[FPSTR(_ledFil1Brightness)], ledFil1.brightness);
+        configComplete &= getJsonValue(bright[FPSTR(_ledFil2Brightness)], ledFil2.brightness);
         configComplete &= getJsonValue(bright[FPSTR(_transitionTime)], transitionDuration);
 
 
-        blueLedRecentlyDisabled = recentlyDisabled(blueLedEnabled, blueLedLastState);
-        ledFil1RecentlyDisabled = recentlyDisabled(ledFil1Enabled, ledFil1LastState);
-        ledFil2RecentlyDisabled = recentlyDisabled(ledFil2Enabled, ledFil2LastState);
-        blueLedRecentlyEnabled = recentlyEnabled(blueLedEnabled, blueLedLastState);
-        ledFil1RecentlyEnabled = recentlyEnabled(ledFil1Enabled, ledFil1LastState);
-        ledFil2RecentlyEnabled = recentlyEnabled(ledFil2Enabled, ledFil2LastState);
+        blueLed.recentlyDisabled = recentlyDisabled(blueLed.enabled, blueLed.lastState);
+        ledFil1.recentlyDisabled = recentlyDisabled(ledFil1.enabled, ledFil1.lastState  );
+        ledFil2.recentlyDisabled = recentlyDisabled(ledFil2.enabled, ledFil2.lastState);
+        blueLed.recentlyEnabled = recentlyEnabled(blueLed.enabled, blueLed.lastState);
+        ledFil1.recentlyEnabled = recentlyEnabled(ledFil1.enabled, ledFil1.lastState    );
+        ledFil2.recentlyEnabled = recentlyEnabled(ledFil2.enabled, ledFil2.lastState);
         
         if (initDone == true)
         {   
             // Note: It would make sense to put the LEDLastState condition in the first if statement, however this breaks the program.
-            if (blueLedEnabled == true && (blueLedLastBrightness != blueLedBrightness && LEDLastState == HIGH)) adjustLedBrightness(blueLedLastBrightness, blueLedBrightness, transitionDuration, BLUE_LED_PWM_CHANNEL);
-            if (ledFil1Enabled == true && (ledFil1LastBrightness != ledFil1Brightness && LEDLastState == HIGH)) adjustLedBrightness(ledFil1LastBrightness, ledFil1Brightness, transitionDuration, LED_FIL1_PWM_CHANNEL);
-            if (ledFil2Enabled == true && (ledFil2LastBrightness != ledFil2Brightness && LEDLastState == HIGH)) adjustLedBrightness(ledFil2LastBrightness, ledFil2Brightness, transitionDuration, LED_FIL2_PWM_CHANNEL);
+            if (blueLed.enabled == true && (blueLed.lastBrightness != blueLed.brightness && LEDLastState == HIGH)) adjustLedBrightness(blueLed.lastBrightness, blueLed.brightness, transitionDuration, blueLed.pwmChannel);
+            if (ledFil1.enabled == true && (ledFil1.lastBrightness != ledFil1.brightness && LEDLastState == HIGH)) adjustLedBrightness(ledFil1.lastBrightness, ledFil1.brightness, transitionDuration, ledFil1.pwmChannel);
+            if (ledFil2.enabled == true && (ledFil2.lastBrightness != ledFil2.brightness && LEDLastState == HIGH)) adjustLedBrightness(ledFil2.lastBrightness, ledFil2.brightness, transitionDuration, ledFil2.pwmChannel);
         }
 
         return configComplete;
