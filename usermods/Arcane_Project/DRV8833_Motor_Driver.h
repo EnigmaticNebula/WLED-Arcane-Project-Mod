@@ -42,6 +42,7 @@ class DRV8833DriverUsermod : public Usermod
     static const uint8_t defMotorMode = 1;
 
     bool initDone = false;
+    bool configRead = false;
 
     // Strings used to reduce flash memory usage
 
@@ -107,6 +108,9 @@ class DRV8833DriverUsermod : public Usermod
                     timeOfLastIncrement = millis();
                     dutyCycle++;
                 }
+                if (dutyCycle == 50) {
+                    pullSLPHigh();
+                }
             }
         }
 
@@ -120,6 +124,18 @@ class DRV8833DriverUsermod : public Usermod
             }
         }
     }
+
+    void pullSLPLow() {
+        digitalWrite(SLP_PIN, LOW);
+    }
+
+    void pullSLPHigh() {
+        digitalWrite(SLP_PIN, HIGH);
+    }
+
+    // void outputMotorSpeed() {
+    //     Serial.println(motorSpeed);
+    // }
 
     void loop() {
 
@@ -135,7 +151,8 @@ class DRV8833DriverUsermod : public Usermod
         if ((millis() - lastDebounceTime) > DEBOUNCE_TIME) {
             if (buttonLastSteadyState == HIGH && buttonCurrentState == LOW) {
                 if (motorLastState == LOW) {
-
+                    // Serial.println("motor turning on");
+                    // outputMotorSpeed();
                     switch (motorMode) {
                         case 1:
                             ledcWrite(AIN2_PWM_CHANNEL, 0);
@@ -143,7 +160,8 @@ class DRV8833DriverUsermod : public Usermod
                             break;
                         case 2:
                             ledcWrite(AIN1_PWM_CHANNEL, 255);
-                            adjustMotorSpeed(0, motorSpeed, transitionDuration, AIN2_PWM_CHANNEL);
+                            // Note: Setting the motor speed to 0 may seem counterintuitive, but when using slow decay, 0 is on and 255 is off.
+                            adjustMotorSpeed(255, (255-motorSpeed), transitionDuration, AIN2_PWM_CHANNEL);
                             break;
                         case 3:
                             ledcWrite(AIN1_PWM_CHANNEL, 0);
@@ -151,31 +169,28 @@ class DRV8833DriverUsermod : public Usermod
                             break;
                         case 4:
                             ledcWrite(AIN2_PWM_CHANNEL, 255);
-                            adjustMotorSpeed(0, motorSpeed, transitionDuration, AIN1_PWM_CHANNEL);
+                            adjustMotorSpeed(255, (255-motorSpeed), transitionDuration, AIN1_PWM_CHANNEL);
                             break;
                     }
                     motorLastState = HIGH;
                 }
 
                 else if (motorLastState == HIGH) {
+                    //Serial.println("motor turning off");
                     switch (motorMode) {
                         case 1:
-                            ledcWrite(AIN2_PWM_CHANNEL, 0);
                             adjustMotorSpeed(motorSpeed, 0, transitionDuration, AIN1_PWM_CHANNEL);
                             break;
                         case 2:
-                            ledcWrite(AIN1_PWM_CHANNEL, 255);
-                            adjustMotorSpeed(motorSpeed, 0, transitionDuration, AIN2_PWM_CHANNEL);
-                            ledcWrite(AIN1_PWM_CHANNEL, 0);
+                            adjustMotorSpeed((255-motorSpeed), 255, transitionDuration, AIN2_PWM_CHANNEL);
+                            //ledcWrite(AIN1_PWM_CHANNEL, 0);
                             break;
                         case 3:
-                            ledcWrite(AIN1_PWM_CHANNEL, 0);
                             adjustMotorSpeed(motorSpeed, 0, transitionDuration, AIN2_PWM_CHANNEL);
                             break;
                         case 4:
-                            ledcWrite(AIN2_PWM_CHANNEL, 255);
-                            adjustMotorSpeed(motorSpeed, 0, transitionDuration, AIN1_PWM_CHANNEL);
-                            ledcWrite(AIN2_PWM_CHANNEL, 0);
+                            adjustMotorSpeed((255-motorSpeed), 255, transitionDuration, AIN1_PWM_CHANNEL);
+                            //ledcWrite(AIN2_PWM_CHANNEL, 0);
                             break;
                     }
                     motorLastState = LOW;
@@ -257,6 +272,8 @@ class DRV8833DriverUsermod : public Usermod
     */
 
     bool readFromConfig(JsonObject& root) override {
+        //Serial.begin(115200);
+
         JsonObject top = root[FPSTR(_name)];
         JsonObject speed = top[FPSTR(_speed)];
         JsonObject mode = top[FPSTR(_motorMode)];
@@ -265,6 +282,7 @@ class DRV8833DriverUsermod : public Usermod
 
         uint8_t lastMotorMode = motorMode;
         int lastMotorSpeed = motorSpeed;
+        int lastMotorSpeedSlowDecay = 255-motorSpeed;
 
         //Assigns the saved values from the cfg.json file to its corresponding variable
         configComplete &= getJsonValue(top[FPSTR(_resetDefaults)], resetDefaults);
@@ -272,6 +290,7 @@ class DRV8833DriverUsermod : public Usermod
         configComplete &= getJsonValue(speed[FPSTR(_transitionDuration)], transitionDuration);
         configComplete &= getJsonValue(mode[F(_mode)], motorMode);
         motorSpeed = assignMotorSpeed(motorSpeed);
+        int motorSpeedSlowDecay = 255-motorSpeed;
 
         if (resetDefaults == true) {
             resetDefaults = false;
@@ -280,37 +299,59 @@ class DRV8833DriverUsermod : public Usermod
             motorMode = defMotorMode;
         }
 
-        if (initDone == true && motorLastState == HIGH) {
-            if (lastMotorSpeed != motorSpeed && lastMotorMode == motorMode) {
-                if (motorMode == 1 || motorMode == 4) {
-                    adjustMotorSpeed(lastMotorSpeed, motorSpeed, transitionDuration, AIN1_PWM_CHANNEL);
+        if (initDone == true && motorLastState == HIGH && configRead == true) {
+
+            if ((lastMotorSpeed != motorSpeed) && (lastMotorMode == motorMode)) {
+
+                switch (lastMotorMode) {
+                    case 1:
+                        adjustMotorSpeed(lastMotorSpeed, motorSpeed, transitionDuration, AIN1_PWM_CHANNEL);
+                        break;
+                    case 2:
+                        adjustMotorSpeed((255-lastMotorSpeed), (255-motorSpeed), transitionDuration, AIN2_PWM_CHANNEL);
+                        break;
+                    case 3:
+                        adjustMotorSpeed(lastMotorSpeed, motorSpeed, transitionDuration, AIN2_PWM_CHANNEL);
+                        break;
+                    case 4:
+                        adjustMotorSpeed((255-lastMotorSpeed), (255-motorSpeed), transitionDuration, AIN1_PWM_CHANNEL);
+                        break;
                 }
 
-                else {
-                    adjustMotorSpeed(lastMotorSpeed, motorSpeed, transitionDuration, AIN2_PWM_CHANNEL);
-                }
             }
 
             if (lastMotorMode != motorMode) {
 
-                if (lastMotorSpeed != motorSpeed) {
-                    if (lastMotorMode == 1 || lastMotorMode == 4) {
-                        adjustMotorSpeed(lastMotorSpeed, motorSpeed, transitionDuration, AIN1_PWM_CHANNEL);
-                    }
-                    else {
-                        adjustMotorSpeed(lastMotorSpeed, motorSpeed, transitionDuration, AIN2_PWM_CHANNEL);
-                    }
-                }
-                if (lastMotorMode == 1 || lastMotorMode == 4) {
-                    adjustMotorSpeed(motorSpeed, 0, transitionDuration, AIN1_PWM_CHANNEL);
-                    ledcWrite(AIN2_PWM_CHANNEL, 0);
-                }
-                else if (lastMotorMode == 2 || lastMotorMode == 3) {
-                    adjustMotorSpeed(motorSpeed, 0, transitionDuration, AIN2_PWM_CHANNEL);
-                    ledcWrite(AIN1_PWM_CHANNEL, 0);
+                switch (lastMotorMode) {
+                    case 1:
+                        adjustMotorSpeed(motorSpeed, 0, transitionDuration, AIN1_PWM_CHANNEL);
+                        ledcWrite(AIN2_PWM_CHANNEL, 0);
+                        break;
+                    
+                    case 2:
+                        adjustMotorSpeed((255-motorSpeed), 255, transitionDuration, AIN2_PWM_CHANNEL);
+                        pullSLPLow();
+                        ledcWrite(AIN1_PWM_CHANNEL, 0);
+                        ledcWrite(AIN2_PWM_CHANNEL, 0);
+                        pullSLPHigh();
+                        break;
+                    
+                    case 3:
+                        adjustMotorSpeed(motorSpeed, 0, transitionDuration, AIN2_PWM_CHANNEL);
+                        ledcWrite(AIN1_PWM_CHANNEL, 0);
+                        break;
+                    
+                    case 4:
+                        adjustMotorSpeed((255-motorSpeed), 255, transitionDuration, AIN1_PWM_CHANNEL);
+                        pullSLPLow();
+                        ledcWrite(AIN1_PWM_CHANNEL, 0);
+                        ledcWrite(AIN2_PWM_CHANNEL, 0);
+                        pullSLPHigh();
                 }
 
-                betterDelay(5000);
+                betterDelay(1000);
+
+                //Serial.print("THIS IS A TEST");
 
                 switch (motorMode) {
                     case 1:
@@ -319,7 +360,7 @@ class DRV8833DriverUsermod : public Usermod
                         break;
                     case 2:
                         ledcWrite(AIN1_PWM_CHANNEL, 255);
-                        adjustMotorSpeed(0, motorSpeed, transitionDuration, AIN2_PWM_CHANNEL);
+                        adjustMotorSpeed(255, (255-motorSpeed), transitionDuration, AIN2_PWM_CHANNEL);
                         break;
                     case 3:
                         ledcWrite(AIN1_PWM_CHANNEL, 0);
@@ -327,18 +368,18 @@ class DRV8833DriverUsermod : public Usermod
                         break;
                     case 4:
                         ledcWrite(AIN2_PWM_CHANNEL, 255);
-                        adjustMotorSpeed(0, motorSpeed, transitionDuration, AIN1_PWM_CHANNEL);
+                        adjustMotorSpeed(255, (255-motorSpeed), transitionDuration, AIN1_PWM_CHANNEL);
                         break;
 
                 }  
             }
         }
 
-
+        configRead = true;
         return configComplete;
     }
 
-        /*
+    /*
     * appendConfigData() is called when user enters usermod settings page
     * it may add additional metadata for certain entry fields (adding drop down is possible)
     * be careful not to add too much as oappend() buffer is limited to 3k
