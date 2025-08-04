@@ -282,7 +282,6 @@ class DRV8833DriverUsermod : public Usermod
 
         uint8_t lastMotorMode = motorMode;
         int lastMotorSpeed = motorSpeed;
-        int lastMotorSpeedSlowDecay = 255-motorSpeed;
 
         //Assigns the saved values from the cfg.json file to its corresponding variable
         configComplete &= getJsonValue(top[FPSTR(_resetDefaults)], resetDefaults);
@@ -290,7 +289,6 @@ class DRV8833DriverUsermod : public Usermod
         configComplete &= getJsonValue(speed[FPSTR(_transitionDuration)], transitionDuration);
         configComplete &= getJsonValue(mode[F(_mode)], motorMode);
         motorSpeed = assignMotorSpeed(motorSpeed);
-        int motorSpeedSlowDecay = 255-motorSpeed;
 
         if (resetDefaults == true) {
             resetDefaults = false;
